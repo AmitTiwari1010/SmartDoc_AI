@@ -1,0 +1,260 @@
+SmartDocs AI
+Complete Implementation Guide — RAG + MCP Knowledge Assistant
+Version 1.0 | Practical build plan for a portfolio/interview-ready project
+Goal: build a manageable but genuine GenAI application that demonstrates document ingestion, retrieval-augmented generation, vector search, MCP tools, tool calling, FastAPI, and React.
+1. Executive Overview
+SmartDocs AI is a document knowledge assistant. A user uploads PDF documents, the system indexes their content, and the user can ask questions. RAG retrieves relevant passages before the LLM generates an answer. An MCP server exposes document operations as standardized tools that an AI client can invoke when the request is an operation rather than a pure knowledge question.
+The project is intentionally scoped so that every major component can be understood and explained in an interview. It is not intended to be a production enterprise platform in version 1.
+2. Problem Statement
+Normal LLMs can answer general questions but may not know the contents of a user's private documents. Sending entire documents with every request is inefficient and may exceed context limits. SmartDocs AI addresses this by indexing documents once, retrieving only relevant chunks for each question, and grounding the answer in those chunks.
+A second problem is tool integration. A knowledge retrieval pipeline does not by itself provide a standardized interface for actions such as listing documents or retrieving document metadata. MCP is used to expose these capabilities through an MCP server.
+3. What the Project Demonstrates
+Document ingestion and text extraction.
+Chunking with controlled overlap.
+Embedding generation and semantic vector search.
+RAG: retrieval followed by context-grounded generation.
+Source metadata/citations for retrieved chunks.
+MCP client/server concepts.
+Three simple MCP tools: list_documents, get_document_info, search_documents.
+FastAPI backend APIs.
+React + Tailwind frontend.
+SQLite metadata storage and Chroma vector storage.
+A clean architecture that can be extended later.
+4. Functional Scope
+4.1 Document Upload
+User selects a PDF.
+Frontend sends the file to POST /api/documents/upload.
+FastAPI validates the file.
+PyMuPDF extracts text page by page.
+Text is split into chunks.
+Embeddings are generated.
+Chunks, embeddings, and metadata are stored in Chroma.
+Document metadata is stored in SQLite.
+Frontend displays indexing success.
+4.2 Knowledge Base
+List indexed documents.
+Show filename, page count, chunk count, file size, and upload time.
+Delete a document and its vector records.
+Keep source/page metadata for citations.
+4.3 RAG Chat
+User submits a question.
+Question is embedded using the same embedding space used for documents.
+Vector search retrieves top-K relevant chunks.
+Retrieved text and metadata are assembled into a context.
+The LLM receives the question plus context.
+The answer is returned with source references.
+If evidence is insufficient, the assistant should say it cannot find the answer in the indexed documents rather than inventing facts.
+4.4 MCP Tools
+list_documents() — returns indexed document metadata.
+get_document_info(document_name) — returns details for one document.
+search_documents(query) — finds documents relevant to a query.
+4.5 UI
+Chat panel.
+Document/knowledge-base sidebar.
+Upload button.
+Source cards beneath answers.
+Tool activity indicator such as 'Using MCP: list_documents'.
+Loading/error states.
+5. High-Level Architecture
+                         SMARTDOCS AI   ┌────────────────────── React + Tailwind ──────────────────────┐   │  Upload │ Knowledge Base │ Chat │ Sources │ Tool Activity   │   └───────────────────────────┬─────────────────────────────────┘                               │ HTTP/JSON                               ▼                    ┌─────────────────────┐                    │ FastAPI Backend     │                    │ /upload /chat       │                    │ /documents          │                    └──────────┬──────────┘                               │             ┌─────────────────┼─────────────────┐             ▼                 ▼                 ▼       Document/RAG        MCP Client          LLM             │                 │       ┌─────┴─────┐           ▼       │           │      MCP Server   PyMuPDF     Chroma       │   Chunking    Embeddings   ├── list_documents       │                    ├── get_document_info       └───────────►        └── search_documents                         SQLite metadata
+The exact runtime arrangement can be simplified during development. The important conceptual separation is: RAG handles knowledge retrieval; MCP handles standardized tool access; the LLM uses the resulting context/tool outputs to produce the final response.
+6. RAG Pipeline — Detailed
+6.1 Ingestion Pipeline
+PDF ↓PyMuPDF ↓Page text + page metadata ↓Chunking ↓Embedding model ↓ChromaDB ├── vector ├── chunk text └── metadata {document, page, chunk_id}
+6.2 Query Pipeline
+User question ↓Question embedding ↓Chroma similarity search ↓Top-K chunks ↓Context builder ↓System prompt + context + question ↓LLM ↓Answer + source metadata
+6.3 Why chunking?
+Large documents should not be passed wholesale to the model for every question. Chunking makes retrieval more precise and keeps the prompt manageable. Start with a token-aware or character-based splitter and test values rather than treating a particular chunk size as universally correct. A practical initial experiment is roughly 500–800 tokens with 50–100 tokens of overlap.
+6.4 Embeddings
+An embedding converts text into a numerical vector representing semantic information. A user question and a relevant document chunk can therefore be close in vector space even when they do not share exact keywords.
+6.5 Vector Search
+For a question vector, Chroma retrieves the nearest stored vectors. The first version can use top-K retrieval, for example K=4. Tune K later based on answer quality and context size.
+6.6 Grounding Prompt
+You are SmartDocs AI.Answer using only the supplied document context.If the context does not contain enough evidence, say so.CONTEXT:{retrieved_chunks}QUESTION:{user_question}
+7. MCP — Detailed Concept
+MCP stands for Model Context Protocol. In this project, the MCP server is not the LLM and is not the vector database. It is a standardized interface through which an AI client can discover and invoke capabilities exposed by the server.
+AI application / host        │        ▼    MCP Client        │        ▼    MCP Server      /   |        /    |     list   info  search   │      │      │   └──────┴──────┘       SQLite / Chroma
+Tools in this project
+list_documents: read-only metadata lookup.
+get_document_info: read-only details for a named document.
+search_documents: semantic/metadata-oriented discovery of documents.
+Keep all version-1 tools read-only. This reduces security risk and keeps the project easy to explain. Later versions can add controlled actions only after authentication and authorization are designed.
+8. RAG vs MCP
+RAG:Question → retrieve relevant knowledge → provide context → LLM answerMCP:AI needs capability → discover tool → invoke MCP tool → receive result → LLM answer
+RAG is about grounding generation with relevant information. MCP is about a standardized way to expose external tools/resources to AI applications. They are complementary, not competing technologies.
+9. Complete Technology Stack
+Language: Python 3.11+
+Frontend: React.js with Vite
+Styling: Tailwind CSS
+Backend API: FastAPI + Uvicorn
+PDF extraction: PyMuPDF
+RAG framework: LangChain components where useful, while understanding the underlying pipeline manually
+Vector database: ChromaDB for local development
+Metadata database: SQLite with SQLAlchemy or a lightweight repository layer
+LLM: an API-based chat model; keep provider access behind a small service wrapper
+Embeddings: an embedding model/API; keep it behind a wrapper so it can be changed later
+MCP: Python MCP SDK
+HTTP client: httpx
+Validation/config: Pydantic + environment variables
+Testing: pytest + FastAPI TestClient
+API testing: Postman or curl
+Version control: Git + GitHub
+Optional deployment later: Vercel for frontend and a Python hosting service for backend
+10. Recommended Project Structure
+SmartDocs-AI/│├── frontend/│   ├── src/│   │   ├── components/│   │   │   ├── ChatWindow.jsx│   │   │   ├── Message.jsx│   │   │   ├── DocumentList.jsx│   │   │   ├── UploadDocument.jsx│   │   │   ├── SourceCard.jsx│   │   │   └── ToolActivity.jsx│   │   ├── pages/│   │   │   └── Dashboard.jsx│   │   ├── services/│   │   │   └── api.js│   │   ├── App.jsx│   │   └── main.jsx│   ├── package.json│   └── vite.config.js│├── backend/│   ├── app/│   │   ├── main.py│   │   ├── config.py│   │   ├── api/│   │   │   ├── chat.py│   │   │   └── documents.py│   │   ├── rag/│   │   │   ├── loader.py│   │   │   ├── chunker.py│   │   │   ├── embeddings.py│   │   │   ├── vector_store.py│   │   │   ├── retriever.py│   │   │   └── prompts.py│   │   ├── llm/│   │   │   └── client.py│   │   ├── db/│   │   │   ├── models.py│   │   │   └── database.py│   │   └── services/│   │       └── document_service.py│   ├── tests/│   └── requirements.txt│├── mcp_server/│   ├── server.py│   ├── tools/│   │   └── document_tools.py│   └── services/│       └── document_service.py│├── data/│   ├── uploads/│   └── chroma/│├── .env.example├── .gitignore├── README.md└── LICENSE
+11. Backend API Contract
+POST   /api/documents/uploadGET    /api/documentsGET    /api/documents/{document_name}DELETE /api/documents/{document_name}POST   /api/chatGET    /api/health
+Upload
+POST /api/documents/uploadmultipart/form-data:    file=<PDF>Response:{  "message": "Document indexed successfully",  "document": {    "name": "rag.pdf",    "pages": 12,    "chunks": 38  }}
+Chat
+POST /api/chat{  "question": "What is RAG?"}Response:{  "answer": "...",  "sources": [    {      "document": "rag.pdf",      "page": 4,      "chunk_id": "rag-4-02"    }  ]}
+12. Database Design
+SQLite metadata
+documents---------------------------------------id              INTEGER PRIMARY KEYfilename        TEXT UNIQUEfile_size       INTEGERpage_count      INTEGERchunk_count     INTEGERuploaded_at     DATETIME
+Chroma metadata
+Each vector record should contain:- document_name- page_number- chunk_id- chunk_text- optional document_id
+Do not duplicate application metadata unnecessarily. SQLite is the source for document records; Chroma is the source for vector retrieval records.
+13. Real-Time Implementation Plan
+Phase 0 — Environment
+Install Python 3.11+ and Node.js LTS.
+Create the Git repository.
+Create a Python virtual environment.
+Create backend and frontend directories.
+Create .env from .env.example.
+Verify FastAPI and React start independently.
+Phase 1 — Build RAG manually
+Take one PDF.
+Extract page text with PyMuPDF.
+Split text into chunks.
+Generate embeddings.
+Store vectors and metadata in Chroma.
+Run a test similarity search from a Python script.
+Print the top 4 chunks for a question.
+Phase 2 — Add LLM generation
+Build a context string from retrieved chunks.
+Create a grounded system prompt.
+Call the LLM.
+Return answer and source metadata.
+Test questions that are both answerable and unanswerable.
+Phase 3 — FastAPI
+Create upload endpoint.
+Create document-list endpoint.
+Create chat endpoint.
+Add validation and error handling.
+Test every endpoint with Postman.
+Phase 4 — MCP
+Create a minimal MCP server.
+Implement list_documents.
+Implement get_document_info.
+Implement search_documents.
+Test tools independently.
+Connect an MCP client/LLM layer so tool calls can be demonstrated.
+Phase 5 — React UI
+Create dashboard layout.
+Add upload flow.
+Add document list.
+Add chat.
+Render source cards.
+Show MCP tool activity.
+Handle loading and error states.
+Phase 6 — Polish
+Add README architecture diagram.
+Add screenshots/GIF.
+Add sample PDFs or safe demo documents.
+Add tests.
+Add logging.
+Deploy only after local behavior is stable.
+14. Example End-to-End Scenarios
+Scenario A — Knowledge question
+User: "What is retrieval augmented generation?"React  ↓POST /api/chat  ↓Question embedding  ↓Chroma similarity search  ↓Top 4 chunks from RAG.pdf  ↓Grounded prompt  ↓LLM  ↓Answer + sources
+Scenario B — MCP operation
+User: "Which documents are in my knowledge base?"React  ↓Backend/AI tool layer  ↓MCP client  ↓list_documents()  ↓MCP server  ↓SQLite  ↓Tool result  ↓LLM formats response
+Scenario C — Combined behavior
+User: "Find information about chunking and tell me whichdocument contains it."Possible flow:1. MCP search_documents("chunking")2. Identify relevant document(s)3. RAG retrieves relevant chunks4. LLM combines evidence5. Response includes document/page sources
+15. Error Handling
+Reject non-PDF files in version 1.
+Reject empty/corrupt PDFs with a useful message.
+Handle documents with no extractable text.
+Prevent duplicate document indexing unless explicitly replacing the existing file.
+Return a clear error when the LLM provider is unavailable.
+Return a clear message when no relevant chunks are found.
+Never expose API keys in frontend code.
+Use timeouts around external API calls.
+Log server-side errors without logging sensitive document contents.
+16. Security Basics
+Keep secrets in .env and never commit .env.
+Use .env.example with placeholder names.
+Validate upload type and size.
+Sanitize filenames.
+Restrict file paths to the upload directory.
+Keep MCP tools read-only in version 1.
+Validate tool arguments server-side.
+Treat document text as untrusted input because documents can contain prompt-injection instructions.
+Do not let retrieved text override system-level safety or application rules.
+If authentication is added later, authorize every document/tool operation.
+17. RAG Quality and Evaluation
+A working demo is not automatically a good RAG system. Test it deliberately.
+Create 15–30 questions whose answers are explicitly present in your documents.
+Create 5–10 questions whose answers are not present.
+Check whether retrieved chunks contain the correct evidence.
+Check whether the final answer stays grounded in the retrieved context.
+Record source correctness and answer correctness separately.
+Experiment with K, chunk size, overlap, and embedding model.
+A simple evaluation sheet can contain: question, expected document, expected page, retrieved documents, retrieved page, answer correctness, and groundedness.
+18. Interview Explanation
+30-second version
+SmartDocs AI is a document knowledge assistant built with React, FastAPI, Python, RAG, ChromaDB, and MCP. Users upload PDFs which are parsed, chunked, embedded, and stored in a vector database. For questions, the system retrieves relevant chunks and gives them to an LLM as context. I also built an MCP server exposing document operations such as listing documents and retrieving document metadata, allowing the AI application to use standardized tools.
+Why RAG?
+Because the model should answer from private or user-provided documents without retraining the model. Retrieval supplies only relevant evidence at query time.
+Why MCP?
+Because RAG solves knowledge retrieval, while MCP provides a standardized interface for exposing tools and external capabilities to AI applications.
+Why Chroma?
+It is simple for local development and makes the vector-search pipeline easy to understand. A production version could move to a managed or server-based vector store.
+Why FastAPI?
+It provides a lightweight Python API layer, request validation through Pydantic, and easy integration with the Python AI ecosystem.
+Why keep MCP tools read-only?
+It keeps the first version safe and easy to reason about. Write operations require stronger authorization, validation, audit logging, and failure handling.
+19. What NOT to Build in Version 1
+Multi-agent orchestration.
+Real router/NMS control.
+Voice input/output.
+Fine-tuning.
+Kubernetes.
+Microservices.
+Twenty different MCP tools.
+Complex authentication.
+Web-scale crawling.
+A custom vector database.
+The goal is a coherent, explainable project—not maximum feature count.
+20. Version 2 Extensions
+DOCX/HTML support.
+Hybrid BM25 + vector retrieval.
+Reranking.
+Conversation memory.
+Document comparison.
+Authentication and user-specific knowledge bases.
+Qdrant or pgvector.
+Streaming LLM responses.
+Evaluation dashboard.
+Controlled write-enabled MCP tools.
+Observability and tracing.
+21. Definition of Done
+A user can upload a PDF.
+The PDF is indexed without manual database work.
+A question retrieves relevant chunks.
+The LLM answers using retrieved context.
+The UI shows source document/page metadata.
+The user can list and inspect documents.
+The MCP server exposes and successfully executes the three tools.
+The project has clear logs and errors.
+The GitHub README contains setup, architecture, screenshots, and explanation.
+You can explain every major component without reading the code during the interview.
+22. Recommended Build Sequence for You
+Do not start by writing the entire application. Build one vertical slice at a time.
+DAY 1  → Python environment + FastAPI basicsDAY 2  → PDF extraction + chunkingDAY 3  → embeddings + ChromaDAY 4  → retrieval + LLM answerDAY 5  → source citations + RAG testingDAY 6  → upload/list APIsDAY 7  → MCP concepts + minimal serverDAY 8  → three MCP toolsDAY 9  → MCP + AI integrationDAY 10 → React dashboardDAY 11 → chat + upload + sourcesDAY 12 → errors + testsDAY 13 → README + architecture + screenshotsDAY 14 → demo rehearsal + interview questions
+The day numbers are a suggested sequence, not a requirement. If a concept is unclear, spend more time there rather than copying the next stage.
+23. Final Architecture Summary
+                    ┌────────────────────┐                    │      React UI       │                    │ Chat + Upload + KB  │                    └─────────┬──────────┘                              │                              ▼                    ┌────────────────────┐                    │      FastAPI        │                    └───────┬─────┬──────┘                            │     │                    ┌───────┘     └────────┐                    ▼                      ▼               RAG Pipeline             MCP Client                    │                      │             ┌──────┴──────┐              ▼             │             │         MCP Server          Embeddings    Chroma          │             │             │       ┌────┼────┐             │             │       ▼    ▼    ▼             │             │     list info search             │             │       │    │    │             └──────┬──────┘       └────┼────┘                    │                   │                    └────────┬──────────┘                             ▼                            LLM                             │                             ▼                      Answer + Sources
+24. First Implementation Task
+Start with a tiny RAG proof-of-concept before React or MCP. Create one PDF, extract its text, split it into chunks, embed the chunks, store them in Chroma, ask one question, print the top four retrieved chunks, and only then connect the LLM. This makes every later layer much easier to understand and debug.
+This document is the implementation blueprint. During the actual build, each stage should be implemented and tested before moving to the next stage.
