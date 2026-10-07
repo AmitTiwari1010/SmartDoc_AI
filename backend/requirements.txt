@@ -3,6 +3,7 @@ uvicorn
 python-multipart
 pymupdf
 langchain
+langchain-community
 chromadb
 sentence-transformers
 sqlalchemy
