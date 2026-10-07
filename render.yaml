@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: smartdoc-ai-backend
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    disk:
+      name: smartdoc-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1

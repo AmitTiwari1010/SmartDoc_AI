@@ -1,4 +1,26 @@
+# Environment
 .env
-node_modules/
-__pycache__/
+.env.local
+.env.production
+
+# Python
+venv/
 .venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Data (ChromaDB + SQLite - do NOT push to GitHub)
+data/
+backend/data/
+uploads/
+backend/uploads/
+
+# Frontend build
+frontend/dist/
+frontend/node_modules/
+node_modules/
+
+# Misc
+*.db
+*.log

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './index.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
 function App() {
   const [query, setQuery] = useState('');
   const [documents, setDocuments] = useState([]);
@@ -17,7 +19,7 @@ function App() {
 
   const loadDocuments = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/documents/');
+      const res = await fetch(`${API_URL}/api/documents/`);
       const data = await res.json();
       if (Array.isArray(data)) setDocuments(data);
     } catch (err) {
@@ -48,7 +50,7 @@ function App() {
 
     setUploadStatus(`Uploading ${files.length} document(s)...`);
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/documents/upload', {
+      const res = await fetch(`${API_URL}/api/documents/upload`, {
         method: 'POST',
         body: formData
       });
@@ -73,7 +75,7 @@ function App() {
   const handleDelete = async (filename) => {
     if (!window.confirm(`Are you sure you want to delete ${filename}?`)) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/documents/${filename}`, {
+      const res = await fetch(`${API_URL}/api/documents/${filename}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -94,7 +96,7 @@ function App() {
     setQuery('');
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/chat/', {
+      const res = await fetch(`${API_URL}/api/chat/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: query })
